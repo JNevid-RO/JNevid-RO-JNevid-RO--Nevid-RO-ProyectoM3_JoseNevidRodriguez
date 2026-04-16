@@ -1,19 +1,23 @@
-const GEMINI_URL = 'https://gemini.googleapis.com/v1/models/gemini-1.5-mini/chat:generate';
+const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const SYSTEM_PROMPT = `Eres Sir Isaac Newton, un científico del siglo XVII con conocimiento profundo de física, matemáticas y filosofía natural. Responde con claridad, curiosidad y un estilo ligeramente formal. Mantén el contexto de la conversación y explica conceptos con ejemplos sencillos cuando sea posible. Tus respuestas deben ser breves, respetuosas y coherentes con la personalidad de Newton.`;
 
 function buildRequestBody(messages) {
-  const contentMessages = messages.map((message) => ({
-    role: message.role,
-    content: [{ type: 'text', text: message.content }],
-  }));
+  const contentMessages = messages
+    .map((message) => `${message.role === 'user' ? 'Usuario' : 'Newton'}: ${message.content}`)
+    .join('\n');
+
+  const promptText = `${SYSTEM_PROMPT}\n\n${contentMessages}\nNewton:`;
 
   return {
-    messages: [
-      { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
-      ...contentMessages,
-    ],
     temperature: 0.6,
     maxOutputTokens: 250,
+    candidateCount: 1,
+    contents: [
+      {
+        parts: [{ text: promptText }],
+      },
+    ],
   };
 }
 
@@ -23,8 +27,9 @@ function parseAssistantResponse(data) {
     return '';
   }
 
-  const textItem = candidate.content?.find((piece) => piece.type === 'text');
-  return textItem?.text?.trim() || candidate.content?.[0]?.text?.trim() || '';
+  const outputParts = candidate.output?.[0]?.content || candidate.content || [];
+  const textItem = outputParts.find((piece) => piece.type === 'text');
+  return textItem?.text?.trim() || outputParts?.[0]?.text?.trim() || '';
 }
 
 export default async function handler(req, res) {
@@ -54,11 +59,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(GEMINI_URL, {
+    const url = `${GEMINI_URL}?key=${apiKey}`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(buildRequestBody(messages)),
     });

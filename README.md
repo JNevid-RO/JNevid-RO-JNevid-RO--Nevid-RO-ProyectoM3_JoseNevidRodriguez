@@ -10,6 +10,8 @@ Esta aplicación es una Single Page Application responsive que permite conversar
 - Enrutado sin recarga de página usando `history.pushState` y manejo de `popstate`
 - Chat con historial en memoria durante la sesión
 - Proxy serverless para proteger la API key de Gemini
+- Uso del endpoint correcto de Google Generative Language
+- Modelo `gemini-1.5-flash` para la versión gratuita
 - Diseño mobile-first con media queries para móvil, tablet y desktop
 - Personaje: Isaac Newton con personalidad histórica
 - Tests unitarios con Vitest
