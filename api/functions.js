@@ -61,18 +61,25 @@ async function fetchModelList(apiKey) {
   return data;
 }
 
-function selectModel(availableModels) {
+function selectModels(availableModels) {
   const availableNames = availableModels
     .filter((model) => model.supportedGenerationMethods?.includes('generateContent'))
     .map((model) => model.name.replace(/^models\//, ''));
 
+  const ordered = [];
   for (const preferred of GEMINI_MODEL_ORDER) {
     if (availableNames.includes(preferred)) {
-      return preferred;
+      ordered.push(preferred);
     }
   }
 
-  return availableNames[0] || null;
+  for (const name of availableNames) {
+    if (!ordered.includes(name)) {
+      ordered.push(name);
+    }
+  }
+
+  return ordered;
 }
 
 export default async function handler(req, res) {
@@ -118,42 +125,53 @@ export default async function handler(req, res) {
   try {
     const body = JSON.stringify(buildRequestBody(messages));
     const available = await fetchModelList(apiKey);
-    const selectedModel = selectModel(available.models || []);
+    const modelCandidates = selectModels(available.models || []);
 
-    if (!selectedModel) {
+    if (modelCandidates.length === 0) {
       return res.status(500).json({ error: 'No se encontró un modelo compatible con generateContent' });
     }
 
-    const url = `${GEMINI_BASE_URL}/${selectedModel}:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body,
-    });
+    let lastError = null;
+    for (const selectedModel of modelCandidates) {
+      const url = `${GEMINI_BASE_URL}/${selectedModel}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body,
+      });
 
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return res.status(500).json({ error: 'Respuesta no válida de Gemini', details: text });
-    }
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return res.status(500).json({ error: 'Respuesta no válida de Gemini', details: text });
+      }
 
-    if (!response.ok) {
-      return res.status(response.status).json({
+      if (response.ok) {
+        const assistant = parseAssistantResponse(data);
+        return res.status(200).json({ assistant, model: selectedModel });
+      }
+
+      lastError = {
+        status: response.status,
         error: data.error?.message || 'Error en la API de Gemini',
         details: data.error?.details || data,
         model: selectedModel,
-      });
+      };
+
+      if (response.status !== 503) {
+        return res.status(response.status).json(lastError);
+      }
+
+      // Si el modelo está saturado, intentamos el siguiente disponible.
     }
 
-    const assistant = parseAssistantResponse(data);
-    return res.status(200).json({ assistant, model: selectedModel });
-
     return res.status(503).json({
-      error: 'Todos los modelos están saturados en este momento. Intenta de nuevo más tarde.',
+      error: 'Todos los modelos compatibles están saturados actualmente. Intenta de nuevo más tarde.',
+      lastError,
     });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Error interno al procesar la petición' });
