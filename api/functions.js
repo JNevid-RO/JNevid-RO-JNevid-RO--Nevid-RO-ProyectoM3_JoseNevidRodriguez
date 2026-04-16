@@ -31,15 +31,45 @@ function buildRequestBody(messages) {
   };
 }
 
+function extractText(value) {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const text = extractText(item);
+      if (text) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  if (value && typeof value === 'object') {
+    if (typeof value.text === 'string') {
+      return value.text;
+    }
+    if (value.content) {
+      return extractText(value.content);
+    }
+    if (value.parts) {
+      return extractText(value.parts);
+    }
+  }
+
+  return '';
+}
+
 function parseAssistantResponse(data) {
   const candidate = data?.candidates?.[0];
   if (!candidate) {
     return '';
   }
 
-  const outputParts = candidate.output?.[0]?.content || candidate.content || [];
-  const textItem = outputParts.find((piece) => piece.type === 'text');
-  return textItem?.text?.trim() || outputParts?.[0]?.text?.trim() || '';
+  const output = candidate.output ?? candidate.content ?? candidate;
+  const text = extractText(output);
+  return text.trim ? text.trim() : text;
 }
 
 async function fetchModelList(apiKey) {
