@@ -1,5 +1,10 @@
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_MODEL_ORDER = [
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash',
+];
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1/models';
 const SYSTEM_PROMPT = `Eres Sir Isaac Newton, un científico del siglo XVII con conocimiento profundo de física, matemáticas y filosofía natural. Responde con claridad, curiosidad y un estilo ligeramente formal. Mantén el contexto de la conversación y explica conceptos con ejemplos sencillos cuando sea posible. Tus respuestas deben ser breves, respetuosas y coherentes con la personalidad de Newton.`;
 
 function buildRequestBody(messages) {
@@ -94,32 +99,45 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = `${GEMINI_URL}?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(buildRequestBody(messages)),
-    });
+    const body = JSON.stringify(buildRequestBody(messages));
 
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return res.status(500).json({ error: 'Respuesta no válida de Gemini', details: text });
-    }
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: data.error?.message || 'Error en la API de Gemini',
-        details: data.error?.details || data,
+    for (const model of GEMINI_MODEL_ORDER) {
+      const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body,
       });
+
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return res.status(500).json({ error: 'Respuesta no válida de Gemini', details: text });
+      }
+
+      if (response.ok) {
+        const assistant = parseAssistantResponse(data);
+        return res.status(200).json({ assistant, model });
+      }
+
+      if (response.status !== 503) {
+        return res.status(response.status).json({
+          error: data.error?.message || 'Error en la API de Gemini',
+          details: data.error?.details || data,
+          model,
+        });
+      }
+
+      // Si es 503, probamos con el siguiente modelo en la lista.
     }
 
-    const assistant = parseAssistantResponse(data);
-    return res.status(200).json({ assistant });
+    return res.status(503).json({
+      error: 'Todos los modelos están saturados en este momento. Intenta de nuevo más tarde.',
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Error interno al procesar la petición' });
   }
