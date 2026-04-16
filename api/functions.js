@@ -37,7 +37,18 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Falta la variable de entorno GEMINI_API_KEY' });
   }
 
-  const messages = Array.isArray(req.body?.messages) ? req.body.messages : null;
+  let messages = null;
+  if (typeof req.body === 'string') {
+    try {
+      const parsed = JSON.parse(req.body);
+      messages = Array.isArray(parsed?.messages) ? parsed.messages : null;
+    } catch {
+      messages = null;
+    }
+  } else {
+    messages = Array.isArray(req.body?.messages) ? req.body.messages : null;
+  }
+
   if (!messages) {
     return res.status(400).json({ error: 'El cuerpo debe incluir un arreglo de mensajes' });
   }
