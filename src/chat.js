@@ -15,8 +15,8 @@ function buildChatView() {
           <span class="error">${currentError || ''}</span>
         </div>
         <div class="chat-window" id="chat-window"></div>
-        <form id="chat-form" class="form-row">
-          <textarea id="chat-input" rows="4" placeholder="Escribe tu mensaje..." required></textarea>
+        <form id="chat-form" class="form-row" method="POST" action="/api/functions">
+          <textarea id="chat-input" name="message" rows="4" placeholder="Escribe tu mensaje..." required></textarea>
           <button type="submit">Enviar</button>
         </form>
       </div>
