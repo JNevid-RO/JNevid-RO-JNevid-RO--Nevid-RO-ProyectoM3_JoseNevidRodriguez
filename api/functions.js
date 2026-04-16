@@ -34,7 +34,40 @@ function parseAssistantResponse(data) {
   return textItem?.text?.trim() || outputParts?.[0]?.text?.trim() || '';
 }
 
+async function fetchModelList(apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+  const response = await fetch(url, { method: 'GET' });
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Respuesta no válida de ListModels: ${text}`);
+  }
+
+  if (!response.ok) {
+    const message = data.error?.message || 'Error listando modelos';
+    throw new Error(message);
+  }
+
+  return data;
+}
+
 export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Falta la variable de entorno GEMINI_API_KEY' });
+    }
+
+    try {
+      const data = await fetchModelList(apiKey);
+      return res.status(200).json(data);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Error al listar modelos' });
+    }
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
   }
