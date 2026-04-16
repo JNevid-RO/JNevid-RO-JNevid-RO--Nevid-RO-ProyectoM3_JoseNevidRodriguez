@@ -1,5 +1,5 @@
 const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent`;
 const SYSTEM_PROMPT = `Eres Sir Isaac Newton, un científico del siglo XVII con conocimiento profundo de física, matemáticas y filosofía natural. Responde con claridad, curiosidad y un estilo ligeramente formal. Mantén el contexto de la conversación y explica conceptos con ejemplos sencillos cuando sea posible. Tus respuestas deben ser breves, respetuosas y coherentes con la personalidad de Newton.`;
 
 function buildRequestBody(messages) {
@@ -35,7 +35,7 @@ function parseAssistantResponse(data) {
 }
 
 async function fetchModelList(apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`;
   const response = await fetch(url, { method: 'GET' });
   const text = await response.text();
   let data;
