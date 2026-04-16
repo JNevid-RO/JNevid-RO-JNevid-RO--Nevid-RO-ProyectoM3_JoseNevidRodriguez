@@ -1,8 +1,11 @@
 const GEMINI_MODEL_ORDER = [
   'gemini-2.5-flash',
-  'gemini-flash-latest',
-  'gemini-2.5-flash-lite',
+  'gemini-2.5-pro',
   'gemini-2.0-flash',
+  'gemini-2.0-flash-001',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash-latest',
+  'gemini-2.5-pro-latest',
 ];
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1/models';
 const SYSTEM_PROMPT = `Eres Sir Isaac Newton, un científico del siglo XVII con conocimiento profundo de física, matemáticas y filosofía natural. Responde con claridad, curiosidad y un estilo ligeramente formal. Mantén el contexto de la conversación y explica conceptos con ejemplos sencillos cuando sea posible. Tus respuestas deben ser breves, respetuosas y coherentes con la personalidad de Newton.`;
@@ -58,6 +61,20 @@ async function fetchModelList(apiKey) {
   return data;
 }
 
+function selectModel(availableModels) {
+  const availableNames = availableModels
+    .filter((model) => model.supportedGenerationMethods?.includes('generateContent'))
+    .map((model) => model.name.replace(/^models\//, ''));
+
+  for (const preferred of GEMINI_MODEL_ORDER) {
+    if (availableNames.includes(preferred)) {
+      return preferred;
+    }
+  }
+
+  return availableNames[0] || null;
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -100,40 +117,40 @@ export default async function handler(req, res) {
 
   try {
     const body = JSON.stringify(buildRequestBody(messages));
+    const available = await fetchModelList(apiKey);
+    const selectedModel = selectModel(available.models || []);
 
-    for (const model of GEMINI_MODEL_ORDER) {
-      const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body,
-      });
-
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        return res.status(500).json({ error: 'Respuesta no válida de Gemini', details: text });
-      }
-
-      if (response.ok) {
-        const assistant = parseAssistantResponse(data);
-        return res.status(200).json({ assistant, model });
-      }
-
-      if (response.status !== 503) {
-        return res.status(response.status).json({
-          error: data.error?.message || 'Error en la API de Gemini',
-          details: data.error?.details || data,
-          model,
-        });
-      }
-
-      // Si es 503, probamos con el siguiente modelo en la lista.
+    if (!selectedModel) {
+      return res.status(500).json({ error: 'No se encontró un modelo compatible con generateContent' });
     }
+
+    const url = `${GEMINI_BASE_URL}/${selectedModel}:generateContent?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body,
+    });
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return res.status(500).json({ error: 'Respuesta no válida de Gemini', details: text });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: data.error?.message || 'Error en la API de Gemini',
+        details: data.error?.details || data,
+        model: selectedModel,
+      });
+    }
+
+    const assistant = parseAssistantResponse(data);
+    return res.status(200).json({ assistant, model: selectedModel });
 
     return res.status(503).json({
       error: 'Todos los modelos están saturados en este momento. Intenta de nuevo más tarde.',
