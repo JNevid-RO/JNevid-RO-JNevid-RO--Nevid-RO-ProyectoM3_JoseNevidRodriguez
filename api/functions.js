@@ -10,14 +10,16 @@ function buildRequestBody(messages) {
   const promptText = `${SYSTEM_PROMPT}\n\n${contentMessages}\nNewton:`;
 
   return {
-    temperature: 0.6,
-    maxOutputTokens: 250,
-    candidateCount: 1,
     contents: [
       {
         parts: [{ text: promptText }],
       },
     ],
+    generationConfig: {
+      temperature: 0.6,
+      maxOutputTokens: 250,
+      candidateCount: 1,
+    },
   };
 }
 
@@ -68,9 +70,19 @@ export default async function handler(req, res) {
       body: JSON.stringify(buildRequestBody(messages)),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return res.status(500).json({ error: 'Respuesta no válida de Gemini', details: text });
+    }
+
     if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || 'Error en la API de Gemini' });
+      return res.status(response.status).json({
+        error: data.error?.message || 'Error en la API de Gemini',
+        details: data.error?.details || data,
+      });
     }
 
     const assistant = parseAssistantResponse(data);
